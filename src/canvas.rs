@@ -3,19 +3,56 @@
 use crate::aabb::Aabb;
 use crate::path::{LineCommand, Path, ToPaths};
 use euclid::point2;
-
 use float_ord::FloatOrd;
+use std::collections::BTreeMap;
 
 /// Unit for things within the canvas space.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CanvasSpace;
+
+#[derive(Clone, Copy, Debug)]
+struct LayerId(u64);
+
+impl From<LayerId> for String {
+    fn from(id: LayerId) -> String {
+        match id {
+            LayerId(0) => String::from("#00f"),
+            LayerId(1) => String::from("#080"),
+            LayerId(2) => String::from("#f00"),
+            LayerId(3) => String::from("#0cc"),
+            LayerId(4) => String::from("#0f0"),
+            LayerId(5) => String::from("#c0c"),
+            LayerId(6) => String::from("#cc0"),
+            _ => String::from("black"),
+        }
+    }
+}
+
+/// A Layer contains a collection of path to be drawn on that specific layer
+#[derive(Debug)]
+pub struct Layer {
+    id: LayerId,
+    paths: Vec<Path<f64, CanvasSpace>>,
+}
+
+impl From<&Layer> for svg::node::element::Group {
+    fn from(item: &Layer) -> svg::node::element::Group {
+        svg::node::element::Group::new()
+            .set("fill", "none")
+            .set("id", format!("layer{}", item.id.0))
+            .set("inkscape:groupmode", "layer")
+            .set("inkscape:label", item.id.0.to_string())
+            .set::<_, String>("stroke", item.id.into())
+            .set("style", "display:inline")
+    }
+}
 
 /// A canvas is a collection of rendered paths. To add new paths to the canvas,
 /// use the `draw` method.
 #[derive(Debug)]
 pub struct Canvas {
     view: Aabb<f64, CanvasSpace>,
-    paths: Vec<Path<f64, CanvasSpace>>,
+    layers: BTreeMap<u64, Layer>,
     stroke_width: f64,
 }
 
@@ -25,7 +62,7 @@ impl Canvas {
         let stroke_width = std::cmp::max(FloatOrd(1.0), FloatOrd(view.width() / 500.0)).0;
         Canvas {
             view,
-            paths: Vec::new(),
+            layers: BTreeMap::new(),
             stroke_width,
         }
     }
@@ -54,7 +91,7 @@ impl Canvas {
     /// Make this canvas's view the bounding box of all the paths that have been
     /// added to the canvas.
     pub fn fit_view_to_paths(&mut self) {
-        if self.paths.is_empty() {
+        if self.layers.is_empty() {
             return;
         }
 
@@ -70,43 +107,45 @@ impl Canvas {
             max_y = std::cmp::max(FloatOrd(max_y), FloatOrd(p.y)).0;
         };
 
-        for path in self.paths.iter() {
-            for cmd in path.commands.iter() {
-                match cmd {
-                    LineCommand::MoveTo(p)
-                    | LineCommand::LineTo(p)
-                    | LineCommand::SmoothQuadtraticCurveTo(p) => process_point(p),
+        for layer in self.layers.values() {
+            for path in layer.paths.iter() {
+                for cmd in path.commands.iter() {
+                    match cmd {
+                        LineCommand::MoveTo(p)
+                        | LineCommand::LineTo(p)
+                        | LineCommand::SmoothQuadtraticCurveTo(p) => process_point(p),
 
-                    LineCommand::CubicBezierTo {
-                        control_1,
-                        control_2,
-                        end,
-                    } => {
-                        process_point(control_1);
-                        process_point(control_2);
-                        process_point(end);
+                        LineCommand::CubicBezierTo {
+                            control_1,
+                            control_2,
+                            end,
+                        } => {
+                            process_point(control_1);
+                            process_point(control_2);
+                            process_point(end);
+                        }
+
+                        LineCommand::SmoothCubicBezierTo { control, end }
+                        | LineCommand::QuadraticBezierTo { control, end } => {
+                            process_point(control);
+                            process_point(end);
+                        }
+
+                        LineCommand::Close => {}
+
+                        LineCommand::MoveBy(_)
+                        | LineCommand::LineBy(_)
+                        | LineCommand::HorizontalLineTo(_)
+                        | LineCommand::HorizontalLineBy(_)
+                        | LineCommand::VerticalLineTo(_)
+                        | LineCommand::VerticalLineBy(_)
+                        | LineCommand::CubicBezierBy { .. }
+                        | LineCommand::SmoothCubicBezierBy { .. }
+                        | LineCommand::QuadraticBezierBy { .. }
+                        | LineCommand::SmoothQuadtraticCurveBy(_)
+                        | LineCommand::ArcTo { .. }
+                        | LineCommand::ArcBy { .. } => unimplemented!(),
                     }
-
-                    LineCommand::SmoothCubicBezierTo { control, end }
-                    | LineCommand::QuadraticBezierTo { control, end } => {
-                        process_point(control);
-                        process_point(end);
-                    }
-
-                    LineCommand::Close => {}
-
-                    LineCommand::MoveBy(_)
-                    | LineCommand::LineBy(_)
-                    | LineCommand::HorizontalLineTo(_)
-                    | LineCommand::HorizontalLineBy(_)
-                    | LineCommand::VerticalLineTo(_)
-                    | LineCommand::VerticalLineBy(_)
-                    | LineCommand::CubicBezierBy { .. }
-                    | LineCommand::SmoothCubicBezierBy { .. }
-                    | LineCommand::QuadraticBezierBy { .. }
-                    | LineCommand::SmoothQuadtraticCurveBy(_)
-                    | LineCommand::ArcTo { .. }
-                    | LineCommand::ArcBy { .. } => unimplemented!(),
                 }
             }
         }
@@ -115,22 +154,45 @@ impl Canvas {
         self.set_view(view);
     }
 
+    /// Create the layer with the given idea. panics if it exists
+    fn create_layer(&mut self, layer_id: u64) {
+        assert!(!self.layers.contains_key(&layer_id));
+        self.layers.insert(
+            layer_id,
+            Layer {
+                paths: Vec::new(),
+                id: LayerId(layer_id),
+            },
+        );
+    }
+
+    /// Get an existing layer with the given ID or create it if it does not exist
+    pub fn create_or_get_layer(&mut self, layer_id: u64) -> &mut Layer {
+        if !self.layers.contains_key(&layer_id) {
+            self.create_layer(layer_id);
+        }
+        self.layers.get_mut(&layer_id).unwrap()
+    }
+
     /// Add the given paths to the canvas.
-    pub fn draw<P>(&mut self, paths: P)
+    pub fn draw<P>(&mut self, layer_id: u64, paths: P)
     where
         P: ToPaths<f64, CanvasSpace>,
     {
-        self.paths.extend(paths.to_paths());
+        self.create_or_get_layer(layer_id)
+            .paths
+            .extend(paths.to_paths());
     }
 
     /// Given a collection of things that can be drawn, draw all of them.
-    pub fn draw_many<I, P>(&mut self, paths: I)
+    pub fn draw_many<I, P>(&mut self, layer_id: u64, paths: I)
     where
         I: IntoIterator<Item = P>,
         P: ToPaths<f64, CanvasSpace>,
     {
+        let layer = self.create_or_get_layer(layer_id);
         for p in paths {
-            self.draw(p);
+            layer.paths.extend(p.to_paths());
         }
     }
 
@@ -161,6 +223,10 @@ impl Canvas {
         let height = height.into();
         let mut doc = svg::Document::new()
             .set(
+                "xmlns:inkscape",
+                "http://www.inkscape.org/namespaces/inkscape",
+            )
+            .set(
                 "viewBox",
                 format!(
                     "{} {} {} {}",
@@ -172,9 +238,16 @@ impl Canvas {
             )
             .set("width", format!("{}{}", width, W::SUFFIX))
             .set("height", format!("{}{}", height, H::SUFFIX));
-        for path in &self.paths {
-            let path: svg::node::element::Path = path.into();
-            doc = doc.add(path.set("stroke-width", self.stroke_width));
+        for layer in self.layers.values() {
+            // TODO: create svg layer
+            let mut layer_node: svg::node::element::Group = layer.into();
+
+            for path in &layer.paths {
+                let path: svg::node::element::Path = path.into();
+                layer_node = layer_node.add(path.set("stroke-width", self.stroke_width));
+            }
+
+            doc = doc.add(layer_node);
         }
         doc
     }
@@ -184,7 +257,11 @@ impl ToPaths<f64, CanvasSpace> for Canvas {
     type Paths = std::vec::IntoIter<Path<f64, CanvasSpace>>;
 
     fn to_paths(&self) -> Self::Paths {
-        self.paths.clone().into_iter()
+        self.layers
+            .values()
+            .flat_map(|v| v.paths.clone())
+            .collect::<Vec<Path<f64, CanvasSpace>>>()
+            .into_iter()
     }
 }
 

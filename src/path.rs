@@ -6,17 +6,12 @@
 use crate::canvas::CanvasSpace;
 use euclid::{point2, vec2, Point2D, Vector2D};
 use num_traits::{Num, NumAssign, NumCast, Signed};
-use std::borrow::Cow;
 use std::fmt::Debug;
 use std::iter;
-use std::marker::PhantomData;
 
 /// A series of line commands that describe a path.
 #[derive(Clone, Debug)]
 pub struct Path<T, U> {
-    /// This path's color.
-    pub color: String,
-
     /// This path's line commands.
     pub commands: Vec<LineCommand<T, U>>,
 }
@@ -24,7 +19,6 @@ pub struct Path<T, U> {
 impl<T, U> Default for Path<T, U> {
     fn default() -> Path<T, U> {
         Path {
-            color: "black".into(),
             commands: vec![],
         }
     }
@@ -392,7 +386,6 @@ impl<T, U> Path<T, U> {
         I: IntoIterator<Item = LineCommand<T, U>>,
     {
         Path {
-            color: "black".into(),
             commands: commands.into_iter().collect(),
         }
     }
@@ -409,7 +402,6 @@ where
         V: NumCast + Copy,
     {
         Path {
-            color: self.color.clone(),
             commands: self.commands.iter().map(|c| c.cast::<V>()).collect(),
         }
     }
@@ -423,7 +415,6 @@ where
     /// the new, transformed path.
     pub fn transform<V>(&self, transformation: &euclid::Transform2D<T, U, V>) -> Path<T, V> {
         Path {
-            color: self.color.clone(),
             commands: self
                 .commands
                 .iter()
@@ -479,7 +470,6 @@ where
             };
         }
         svg::node::element::Path::new()
-            .set("stroke", path.color.as_str())
             .set("fill", "none")
             .set("d", data)
     }
@@ -599,6 +589,7 @@ where
     }
 }
 
+/*
 /// A `ToPaths` wrapper type that forces all of the paths produced by the inner
 /// type to be of a certain color. Created using `ToPathsExt::color`.
 #[derive(Debug, Clone)]
@@ -662,3 +653,4 @@ pub trait ToPathsExt<T, U>: ToPaths<T, U> {
 }
 
 impl<S, T, U> ToPathsExt<T, U> for S where S: ToPaths<T, U> {}
+*/
