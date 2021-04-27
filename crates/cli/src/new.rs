@@ -11,7 +11,7 @@ pub struct New {
     name: PathBuf,
 
     /// The fart project template to use.
-    #[structopt(default_value = "https://github.com/fitzgen/fart-template.git")]
+    #[structopt(default_value = "https://github.com/jhbruhn/fart-template.git")]
     template: String,
 }
 

@@ -22,6 +22,7 @@ num-traits = "0.2.14"
 rand = { version = "0.8.3", features = ["small_rng"] }
 svg = "0.9.1"
 partial-min-max = { path = "crates/partial-min-max", version = "=0.4.0" }
+float-ord = "0.3.1"
 
 [workspace]
 members = ["crates/cli"]

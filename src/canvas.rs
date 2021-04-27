@@ -4,6 +4,8 @@ use crate::aabb::Aabb;
 use crate::path::{LineCommand, Path, ToPaths};
 use euclid::point2;
 
+use float_ord::FloatOrd;
+
 /// Unit for things within the canvas space.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CanvasSpace;
@@ -12,15 +14,15 @@ pub struct CanvasSpace;
 /// use the `draw` method.
 #[derive(Debug)]
 pub struct Canvas {
-    view: Aabb<i64, CanvasSpace>,
-    paths: Vec<Path<i64, CanvasSpace>>,
-    stroke_width: i64,
+    view: Aabb<f64, CanvasSpace>,
+    paths: Vec<Path<f64, CanvasSpace>>,
+    stroke_width: f64,
 }
 
 impl Canvas {
     /// Construct a new canvas with the given viewport.
-    pub fn new(view: Aabb<i64, CanvasSpace>) -> Canvas {
-        let stroke_width = view.width() / 500;
+    pub fn new(view: Aabb<f64, CanvasSpace>) -> Canvas {
+        let stroke_width = std::cmp::max(FloatOrd(1.0), FloatOrd(view.width() / 500.0)).0;
         Canvas {
             view,
             paths: Vec::new(),
@@ -29,23 +31,23 @@ impl Canvas {
     }
 
     /// Get the stroke width for paths in this canvas.
-    pub fn stroke_width(&self) -> i64 {
+    pub fn stroke_width(&self) -> f64 {
         self.stroke_width
     }
 
     /// Set the stroke width for paths in this canvas.
-    pub fn set_stroke_width(&mut self, stroke_width: i64) {
+    pub fn set_stroke_width(&mut self, stroke_width: f64) {
         self.stroke_width = stroke_width;
     }
 
     /// Get this canvas's view.
     #[inline]
-    pub fn view(&self) -> &Aabb<i64, CanvasSpace> {
+    pub fn view(&self) -> &Aabb<f64, CanvasSpace> {
         &self.view
     }
 
     /// Set this canvas's view.
-    pub fn set_view(&mut self, view: Aabb<i64, CanvasSpace>) {
+    pub fn set_view(&mut self, view: Aabb<f64, CanvasSpace>) {
         self.view = view;
     }
 
@@ -56,16 +58,16 @@ impl Canvas {
             return;
         }
 
-        let mut min_x = std::i64::MAX;
-        let mut min_y = std::i64::MAX;
-        let mut max_x = std::i64::MIN;
-        let mut max_y = std::i64::MIN;
+        let mut min_x = std::f64::MAX;
+        let mut min_y = std::f64::MAX;
+        let mut max_x = std::f64::MIN;
+        let mut max_y = std::f64::MIN;
 
-        let mut process_point = |p: &euclid::Point2D<i64, CanvasSpace>| {
-            min_x = std::cmp::min(min_x, p.x);
-            min_y = std::cmp::min(min_y, p.y);
-            max_x = std::cmp::max(max_x, p.x);
-            max_y = std::cmp::max(max_y, p.y);
+        let mut process_point = |p: &euclid::Point2D<f64, CanvasSpace>| {
+            min_x = std::cmp::min(FloatOrd(min_x), FloatOrd(p.x)).0;
+            min_y = std::cmp::min(FloatOrd(min_y), FloatOrd(p.y)).0;
+            max_x = std::cmp::max(FloatOrd(max_x), FloatOrd(p.x)).0;
+            max_y = std::cmp::max(FloatOrd(max_y), FloatOrd(p.y)).0;
         };
 
         for path in self.paths.iter() {
@@ -116,7 +118,7 @@ impl Canvas {
     /// Add the given paths to the canvas.
     pub fn draw<P>(&mut self, paths: P)
     where
-        P: ToPaths<i64, CanvasSpace>,
+        P: ToPaths<f64, CanvasSpace>,
     {
         self.paths.extend(paths.to_paths());
     }
@@ -125,7 +127,7 @@ impl Canvas {
     pub fn draw_many<I, P>(&mut self, paths: I)
     where
         I: IntoIterator<Item = P>,
-        P: ToPaths<i64, CanvasSpace>,
+        P: ToPaths<f64, CanvasSpace>,
     {
         for p in paths {
             self.draw(p);
@@ -178,8 +180,8 @@ impl Canvas {
     }
 }
 
-impl ToPaths<i64, CanvasSpace> for Canvas {
-    type Paths = std::vec::IntoIter<Path<i64, CanvasSpace>>;
+impl ToPaths<f64, CanvasSpace> for Canvas {
+    type Paths = std::vec::IntoIter<Path<f64, CanvasSpace>>;
 
     fn to_paths(&self) -> Self::Paths {
         self.paths.clone().into_iter()

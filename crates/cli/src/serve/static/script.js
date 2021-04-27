@@ -35,11 +35,22 @@ function rerun() {
   });
 }
 
+function like() {
+  fetch("/like", {
+    method: "POST",
+    cache: "no-cache",
+    headers: {
+      "Content-Type": "application/json",
+    }
+  });
+}
+
+
 function debounce(f) {
   let id = null;
   return function debounced(...args) {
     clearTimeout(id);
-    id = setTimeout(() => f.apply(this, args), 100);
+    id = setTimeout(() => f.apply(this, args), 500);
   };
 }
 
@@ -50,6 +61,12 @@ const regenerate = document.getElementById("regenerate");
 regenerate.addEventListener("click", event => {
   event.preventDefault();
   rerun();
+});
+
+const like_button = document.getElementById("like");
+like_button.addEventListener("click", event => {
+    event.preventDefault();
+    like();
 });
 
 class UserConst {
@@ -135,6 +152,7 @@ const userConsts = new UserConstSet(userConstsForm);
 events.addEventListener("start", _ => logs.textContent = "");
 events.addEventListener("output", e => {
   const data = JSON.parse(e.data);
+    console.log(e.data);
   for (const [_, name, ty, value] of data.matchAll(/.*fart: const ([\w_]+): ([\w_]+) = (.+);.*/g)) {
     userConsts.insert(name, ty, value);
   }

@@ -105,6 +105,7 @@ where
     F: FnOnce(&mut Config) -> Result<svg::Document>,
 {
     let then = std::time::Instant::now();
+    eprintln!("fart: PARAMS START");
     let code = match try_generate(f) {
         Ok(()) => {
             eprintln!(
@@ -130,6 +131,7 @@ where
 {
     let mut config = Config::new().context("failed to read configuration")?;
     let doc = f(&mut config).context("function supplied to `fart::generate` failed")?;
+    eprintln!("fart: PARAMS END");
     svg::save(&config.file_name, &doc).context("failed to save SVG to a file")?;
     Ok(())
 }

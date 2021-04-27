@@ -54,20 +54,36 @@ impl SubCommand for Serve {
         let subscribers = app_data.subscribers.clone();
         let project = self.project.clone();
         let extra = self.extra.clone();
+
+        let mut output_buffer = String::new();
+        let mut parsing_params = false;
         thread::spawn(move || {
             Watcher::new(project)
                 .extra(extra)
                 .on_output({
                     let subscribers = subscribers.clone();
                     move |output| {
-                        let send_output = || -> Result<()> {
-                            let event = events::Event::new("output".into(), output)
-                                .context("failed to serialize output event")?;
-                            futures::executor::block_on(events::broadcast(&subscribers, event))?;
-                            Ok(())
-                        };
-                        if let Err(e) = send_output() {
-                            eprintln!("warning: {}", e);
+                        output_buffer.push_str(output);
+                        if output.contains("fart: PARAMS START") {
+                            parsing_params = true;
+                        }
+                        if output.contains("fart: PARAMS END") {
+                            parsing_params = false;
+                        }
+                        if !parsing_params {
+                            let send_output = || -> Result<()> {
+                                let event = events::Event::new("output".into(), &output_buffer)
+                                    .context("failed to serialize output event")?;
+                                futures::executor::block_on(events::broadcast(
+                                    &subscribers,
+                                    event,
+                                ))?;
+                                Ok(())
+                            };
+                            if let Err(e) = send_output() {
+                                eprintln!("warning: {}", e);
+                            }
+                            output_buffer.clear();
                         }
                     }
                 })
@@ -118,6 +134,7 @@ impl SubCommand for Serve {
         ));
         app.at("/events").get(events);
         app.at("/rerun").post(rerun);
+        app.at("/like").post(like);
         app.at("/images/:image").get(image);
         async_std::task::block_on(
             app.listen(format!("127.0.0.1:{}", self.port))
@@ -147,7 +164,7 @@ fn serve_from_memory(
         content_type: &'static str,
         body: &'static str,
     }
-    
+
     #[async_trait::async_trait]
     impl<T> tide::Endpoint<T> for ServeFromMemory
     where
@@ -241,4 +258,25 @@ async fn serve_static_file(path: PathBuf) -> tide::Result<tide::Response> {
     let mut res = tide::Response::new(200);
     res.set_body(tide::Body::from_file(path).await?);
     Ok(res)
+}
+
+async fn like(cx: tide::Request<AppData>) -> tide::Result<tide::Response> {
+    let now = chrono::Utc::now();
+    let now = now.format("%Y-%m-%d-%H-%M-%S-%f").to_string();
+
+    let like_name = format!("liked_{}.svg", now);
+    let liked_path = cx.state().project.join("liked/");
+    std::fs::create_dir_all(&liked_path).unwrap();
+    let liked_path = liked_path.join(like_name);
+    
+    let latest_path = cx.state().project.join("images").join("latest.svg");
+
+    println!("Latest: {:?} Liked: {:?}", &latest_path, &liked_path);
+
+    std::fs::copy(
+        &latest_path,
+        &liked_path,
+    ).unwrap();
+
+    Ok(tide::Response::new(200))
 }

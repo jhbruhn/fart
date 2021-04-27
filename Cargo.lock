@@ -852,6 +852,7 @@ dependencies = [
  "fart-2d-geom",
  "fart-aabb",
  "fart-utils",
+ "float-ord",
  "id-arena",
  "lazy_static",
  "noise",
@@ -958,6 +959,12 @@ checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
 dependencies = [
  "num-traits",
 ]
+
+[[package]]
+name = "float-ord"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64860170d0b2dd3f1c5af6d96aafa47b5928ac0163116c1ab27313480d82b547"
 
 [[package]]
 name = "form_urlencoded"
