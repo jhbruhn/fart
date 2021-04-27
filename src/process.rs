@@ -1,6 +1,7 @@
 //! Incrementally computed processs for drawing onto a canvas.
 
 use crate::canvas::Canvas;
+use crate::canvas::SvgUnit;
 
 /// A process is something that is incrementally computed and drawn.
 ///
@@ -66,7 +67,8 @@ use crate::canvas::Canvas;
 ///     }
 /// }
 /// ```
-pub trait Process {
+pub trait Process<Unit> where
+Unit: SvgUnit{
     /// Update the process's state.
     ///
     /// If the process is complete, return `true`. Then there will be a final
@@ -74,19 +76,20 @@ pub trait Process {
     ///
     /// If the process is not finished, return `false` and `update` will be
     /// called again in the future.
-    fn update(&mut self, canvas: &Canvas) -> bool;
+    fn update(&mut self, canvas: &Canvas<Unit>) -> bool;
 
     /// Draw the current state of the process to the given canvas.
     ///
     /// If `last_frame` is true, then this is the last time that `draw` will be
     /// called.
-    fn draw(&self, canvas: &mut Canvas, last_frame: bool);
+    fn draw(&self, canvas: &mut Canvas<Unit>, last_frame: bool);
 }
 
 /// Run a process to completion, drawing it to the given canvas.
-pub fn run<P>(canvas: &mut Canvas, process: &mut P)
+pub fn run<P, Unit>(canvas: &mut Canvas<Unit>, process: &mut P)
 where
-    P: Process,
+    Unit: SvgUnit,
+    P: Process<Unit>,
 {
     loop {
         let last_frame = process.update(canvas);
