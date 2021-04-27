@@ -545,6 +545,29 @@ where
     }
 }
 
+impl<T, U> ToPaths<T, U> for fart_2d_geom::Polyline<T, U>
+where
+    T: Copy + NumAssign + PartialOrd + Signed + Debug,
+{
+    type Paths = iter::Once<Path<T, U>>;
+
+    fn to_paths(&self) -> Self::Paths {
+        let mut commands = Vec::with_capacity(self.vertices().len());
+
+        let mut first = true;
+        for v in self.vertices() {
+            commands.push(if first {
+                first = false;
+                LineCommand::MoveTo(*v)
+            } else {
+                LineCommand::LineTo(*v)
+            });
+        }
+
+        iter::once(Path::with_commands(commands))
+    }
+}
+
 impl<T, U> ToPaths<T, U> for fart_2d_geom::Line<T, U>
 where
     T: Clone,

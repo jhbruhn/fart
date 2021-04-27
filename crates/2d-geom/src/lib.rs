@@ -5,8 +5,9 @@
 mod convex_polygon;
 mod line;
 mod polygon;
+mod polyline;
 
-pub use crate::{convex_polygon::*, line::*, polygon::*};
+pub use crate::{convex_polygon::*, line::*, polygon::*, polyline::*};
 
 use euclid::{point2, Point2D};
 use num_traits::{Num, NumAssign, NumCast, Signed};
