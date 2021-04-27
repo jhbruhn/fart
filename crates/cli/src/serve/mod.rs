@@ -268,15 +268,20 @@ async fn like(cx: tide::Request<AppData>) -> tide::Result<tide::Response> {
     let liked_path = cx.state().project.join("liked/");
     std::fs::create_dir_all(&liked_path).unwrap();
     let liked_path = liked_path.join(like_name);
-    
+
     let latest_path = cx.state().project.join("images").join("latest.svg");
 
     println!("Latest: {:?} Liked: {:?}", &latest_path, &liked_path);
 
-    std::fs::copy(
-        &latest_path,
-        &liked_path,
-    ).unwrap();
+    std::fs::copy(&latest_path, &liked_path).unwrap();
+
+    crate::git::add_all(&cx.state().project, &mut crate::output::Output::Inherit).unwrap();
+    crate::git::commit(
+        &cx.state().project,
+        &format!("Liked {}", now),
+        &mut crate::output::Output::Inherit,
+    )
+    .unwrap();
 
     Ok(tide::Response::new(200))
 }
