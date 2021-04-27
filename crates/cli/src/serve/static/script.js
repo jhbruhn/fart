@@ -86,7 +86,11 @@ class UserConst {
     this.element.appendChild(this.label);
 
     this.input.addEventListener("input", this.onInput);
-    this.input.setAttribute("type", "text");
+    if((ty.includes("32") || ty.includes("64")) && !name.includes("RNG_SEED")) {
+      this.input.setAttribute("type", "number");
+    } else {
+      this.input.setAttribute("type", "text");
+    }
     this.element.appendChild(this.input);
   }
 
@@ -102,7 +106,7 @@ class UserConst {
     this.used = true;
     this.label.textContent = `${name}: ${ty} =`;
     this.input.setAttribute("name", name);
-    this.input.setAttribute("placeholder", value);
+    this.input.setAttribute("value", value);
   }
 
   destroy() {
@@ -159,7 +163,9 @@ events.addEventListener("output", e => {
   logs.textContent += data;
 });
 events.addEventListener("finish", _ => {
-  latest.setAttribute("data", `./images/latest.svg?${Date.now()}-${Math.random()}`);
+    setTimeout(function() {
+        latest.setAttribute("data", `./images/latest.svg?${Date.now()}-${Math.random()}`);
+    }, 500);
 });
 events.onerror = event => {
   logs.textContent = `Error: disconnected from ${window.location.host}/events.`;
