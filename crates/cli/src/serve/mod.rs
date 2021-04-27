@@ -130,6 +130,7 @@ impl SubCommand for Serve {
     }
 }
 
+#[derive(Clone)]
 struct AppData {
     project: PathBuf,
     subscribers: Arc<Mutex<HashMap<usize, mpsc::Sender<events::Event>>>>,
@@ -146,37 +147,40 @@ fn serve_from_memory(
         content_type: &'static str,
         body: &'static str,
     }
-
-    impl<T> tide::Endpoint<T> for ServeFromMemory {
-        type Fut = futures::future::Ready<tide::Response>;
-
-        fn call(&self, _cx: tide::Request<T>) -> Self::Fut {
-            futures::future::ready(
-                tide::Response::new(200)
-                    .body_string(self.body.to_string())
-                    .set_header("Content-Type", self.content_type),
-            )
+    
+    #[async_trait::async_trait]
+    impl<T> tide::Endpoint<T> for ServeFromMemory
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        async fn call(&self, _cx: tide::Request<T>) -> tide::Result<tide::Response> {
+            let mut res = tide::Response::new(200);
+            res.insert_header("Content-Type", self.content_type);
+            res.set_body(tide::Body::from_string(self.body.to_string()));
+            Ok(res)
         }
     }
 }
 
-async fn events(cx: tide::Request<AppData>) -> tide::Response {
+async fn events(cx: tide::Request<AppData>) -> tide::Result<tide::Response> {
     let events = events::EventStream::new(cx.state().subscribers.clone());
-    tide::Response::with_reader(200, events)
-        .set_header("Content-Type", "text/event-stream")
-        .set_header("X-Accel-Buffering", "no")
-        .set_header("Cache-Control", "no-cache")
+    let mut res = tide::Response::new(200);
+    res.set_body(tide::Body::from_reader(events, None));
+    res.insert_header("Content-Type", "text/event-stream");
+    res.insert_header("X-Accel-Buffering", "no");
+    res.insert_header("Cache-Control", "no-cache");
+    Ok(res)
 }
 
-async fn rerun(mut cx: tide::Request<AppData>) -> tide::Response {
-    let response = tide::Response::new(200);
+async fn rerun(mut cx: tide::Request<AppData>) -> tide::Result<tide::Response> {
+    let mut response = tide::Response::new(200);
 
     let vars: HashMap<String, String> = match cx.body_json().await {
         Ok(vars) => vars,
         Err(e) => {
-            return response
-                .set_status(tide::http::StatusCode::BAD_REQUEST)
-                .body_string(e.to_string())
+            let mut res = tide::Response::new(tide::http::StatusCode::BadRequest);
+            res.set_body(tide::Body::from_string(e.to_string()));
+            return Ok(res);
         }
     };
 
@@ -215,25 +219,26 @@ async fn rerun(mut cx: tide::Request<AppData>) -> tide::Response {
     };
 
     match touched {
-        Ok(_) => response.body_string("".to_string()),
-        Err(e) => response
-            .body_string(e.to_string())
-            .set_status(tide::http::StatusCode::INTERNAL_SERVER_ERROR),
-    }
+        Ok(_) => response.set_body(tide::Body::from_string("".to_string())),
+        Err(e) => {
+            response.set_body(tide::Body::from_string(e.to_string()));
+            response.set_status(tide::http::StatusCode::InternalServerError);
+        }
+    };
+    Ok(response)
 }
 
-async fn image(cx: tide::Request<AppData>) -> tide::Response {
-    let image = cx.param::<PathBuf>("image").unwrap();
+async fn image(cx: tide::Request<AppData>) -> tide::Result<tide::Response> {
+    let image = PathBuf::from(cx.param("image").unwrap());
     if image.extension() != Some(OsStr::new("svg")) {
-        return tide::Response::new(404);
+        return Ok(tide::Response::new(404));
     }
     let path = cx.state().project.join("images").join(image);
     serve_static_file(path).await
 }
 
-async fn serve_static_file(path: PathBuf) -> tide::Response {
-    match async_std::fs::File::open(path).await {
-        Ok(file) => tide::Response::with_reader(200, async_std::io::BufReader::new(file)),
-        Err(e) => tide::Response::new(500).body_string(e.to_string()),
-    }
+async fn serve_static_file(path: PathBuf) -> tide::Result<tide::Response> {
+    let mut res = tide::Response::new(200);
+    res.set_body(tide::Body::from_file(path).await?);
+    Ok(res)
 }

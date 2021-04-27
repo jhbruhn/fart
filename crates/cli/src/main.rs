@@ -1,4 +1,4 @@
-#![feature(async_closure)]
+//#![feature(async_closure)]
 
 mod cargo;
 mod command_ext;

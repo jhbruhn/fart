@@ -12,7 +12,7 @@ pub use fart_utils::{clamp, map_range};
 pub use lazy_static::lazy_static;
 pub use noise::NoiseFn;
 pub use rand::{
-    distributions::{Distribution, Normal, Uniform},
+    distributions::{Distribution, Uniform},
     Rng,
 };
 
