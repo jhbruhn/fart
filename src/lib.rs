@@ -36,6 +36,7 @@ pub mod canvas;
 pub mod path;
 pub mod prelude;
 pub mod process;
+pub mod units;
 
 mod thread_rng;
 mod user_const;

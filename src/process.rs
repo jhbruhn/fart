@@ -1,7 +1,7 @@
 //! Incrementally computed processs for drawing onto a canvas.
 
 use crate::canvas::Canvas;
-use crate::canvas::SvgUnit;
+use crate::units::SvgUnit;
 
 /// A process is something that is incrementally computed and drawn.
 ///

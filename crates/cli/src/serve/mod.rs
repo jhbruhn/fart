@@ -67,7 +67,7 @@ impl SubCommand for Serve {
                         if output.contains("fart: PARAMS START") {
                             parsing_params = true;
                         }
-                        if output.contains("fart: PARAMS END") {
+                        if output.contains("fart: PARAMS END") || output.contains("panicked") {
                             parsing_params = false;
                         }
                         if !parsing_params {
@@ -256,6 +256,7 @@ async fn image(cx: tide::Request<AppData>) -> tide::Result<tide::Response> {
 
 async fn serve_static_file(path: PathBuf) -> tide::Result<tide::Response> {
     let mut res = tide::Response::new(200);
+    res.insert_header("Cache-control", "max-age=0, must-revalidate");
     res.set_body(tide::Body::from_file(path).await?);
     Ok(res)
 }

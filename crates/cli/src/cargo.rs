@@ -11,6 +11,7 @@ where
 {
     process::Command::new("cargo")
         .arg("build")
+        .arg("--release")
         .arg("--manifest-path")
         .arg(dir.as_ref().join("Cargo.toml"))
         .args(args)

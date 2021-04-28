@@ -1,9 +1,10 @@
 //! The most common functionality re-exported.
 
 pub use crate::{
-    canvas::{Canvas, CanvasSpace, Inches, Millis},
+    canvas::{Canvas, CanvasSpace},
     path::{LineCommand, Path, ToPaths},
     process::Process,
+    units::{Inches, Millis},
     user_const, Config,
 };
 pub use euclid::{point2, vec2};

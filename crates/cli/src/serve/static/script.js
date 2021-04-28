@@ -50,7 +50,7 @@ function debounce(f) {
   let id = null;
   return function debounced(...args) {
     clearTimeout(id);
-    id = setTimeout(() => f.apply(this, args), 500);
+    id = setTimeout(() => f.apply(this, args), 300);
   };
 }
 
@@ -88,10 +88,25 @@ class UserConst {
     this.input.addEventListener("input", this.onInput);
     if((ty.includes("32") || ty.includes("64")) && !name.includes("RNG_SEED")) {
       this.input.setAttribute("type", "number");
+      if(ty.includes("f32") || ty.includes("f64")) 
+        this.input.setAttribute("step", "0.1");
     } else {
       this.input.setAttribute("type", "text");
     }
+
+    if(name.includes("RNG_SEED")) {
+        this.randomize = document.createElement("button");
+        this.randomize.innerHTML =  "RANDOMIZE";
+        this.randomize.addEventListener("click", event => {
+            event.preventDefault();
+            this.update(name, ty, Math.floor(Math.random() * 1000000000));
+            debouncedRerun();
+        });
+    }
+
     this.element.appendChild(this.input);
+    if(this.randomize)
+      this.element.appendChild(this.randomize);
   }
 
   onInput(event) {
@@ -149,7 +164,7 @@ class UserConstSet {
 }
 
 const logs = document.getElementById("logs");
-const latest = document.querySelector("#latest > object");
+const latest = document.querySelector("#latest > img");
 const events = new EventSource("/events");
 const userConsts = new UserConstSet(userConstsForm);
 
@@ -164,8 +179,8 @@ events.addEventListener("output", e => {
 });
 events.addEventListener("finish", _ => {
     setTimeout(function() {
-        latest.setAttribute("data", `./images/latest.svg?${Date.now()}-${Math.random()}`);
-    }, 500);
+        latest.src = `./images/latest.svg#${Date.now()}-${Math.random()}`;
+    }, 5);
 });
 events.onerror = event => {
   logs.textContent = `Error: disconnected from ${window.location.host}/events.`;

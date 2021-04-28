@@ -2,6 +2,7 @@
 
 use crate::aabb::Aabb;
 use crate::path::{LineCommand, Path, ToPaths};
+use crate::units::*;
 use euclid::point2;
 use float_ord::FloatOrd;
 use std::collections::BTreeMap;
@@ -50,22 +51,29 @@ impl From<&Layer> for svg::node::element::Group {
 /// A canvas is a collection of rendered paths. To add new paths to the canvas,
 /// use the `draw` method.
 #[derive(Debug)]
-pub struct Canvas<Unit> where Unit: SvgUnit {
-    width: Unit,
-    height: Unit,
+pub struct Canvas<Unit>
+where
+    Unit: SvgUnit,
+{
+    paper: Paper<Unit>,
     view: Aabb<f64, CanvasSpace>,
     layers: BTreeMap<u64, Layer>,
     stroke_width: f64,
 }
 
-impl<Unit> Canvas<Unit> where Unit: SvgUnit {
+impl<Unit> Canvas<Unit>
+where
+    Unit: SvgUnit,
+{
     /// Construct a new canvas with the given viewport.
-    pub fn new(width: Unit, height: Unit) -> Canvas<Unit> {
-        let stroke_width = std::cmp::max(FloatOrd(0.2), FloatOrd(width.into() / 500.0)).0;
+    pub fn new(paper: Paper<Unit>) -> Canvas<Unit> {
+        let stroke_width = std::cmp::max(FloatOrd(0.2), FloatOrd(paper.width.into() / 500.0)).0;
         Canvas {
-            width,
-            height,
-            view: Aabb::new(point2(0.0, 0.0), point2(width.into(), height.into())),
+            paper,
+            view: Aabb::new(
+                point2(0.0, 0.0),
+                point2(paper.width.into(), paper.height.into()),
+            ),
             layers: BTreeMap::new(),
             stroke_width,
         }
@@ -79,6 +87,12 @@ impl<Unit> Canvas<Unit> where Unit: SvgUnit {
     /// Set the stroke width for paths in this canvas.
     pub fn set_stroke_width(&mut self, stroke_width: f64) {
         self.stroke_width = stroke_width;
+    }
+
+    /// Get this canvas's paper
+    #[inline]
+    pub fn paper(&self) -> Paper<Unit> {
+        self.paper
     }
 
     /// Get this canvas's view.
@@ -219,10 +233,9 @@ impl<Unit> Canvas<Unit> where Unit: SvgUnit {
     /// let svg_doc = canvas.create_svg(Inches(3.0), Inches(3.0));
     /// # let _ = svg_doc;
     /// ```
-    pub fn create_svg(&self) -> svg::Document
-    {
-        let width = self.width.into();
-        let height = self.height.into();
+    pub fn create_svg(&self) -> svg::Document {
+        let width = self.paper.width.into();
+        let height = self.paper.height.into();
         let mut doc = svg::Document::new()
             .set(
                 "xmlns:inkscape",
@@ -255,7 +268,10 @@ impl<Unit> Canvas<Unit> where Unit: SvgUnit {
     }
 }
 
-impl<Unit> ToPaths<f64, CanvasSpace> for Canvas<Unit> where Unit: SvgUnit {
+impl<Unit> ToPaths<f64, CanvasSpace> for Canvas<Unit>
+where
+    Unit: SvgUnit,
+{
     type Paths = std::vec::IntoIter<Path<f64, CanvasSpace>>;
 
     fn to_paths(&self) -> Self::Paths {
@@ -265,43 +281,4 @@ impl<Unit> ToPaths<f64, CanvasSpace> for Canvas<Unit> where Unit: SvgUnit {
             .collect::<Vec<Path<f64, CanvasSpace>>>()
             .into_iter()
     }
-}
-
-/// A physical unit supported by SVG (inches, centimeters, etc). Used when
-/// plotting an image.
-pub trait SvgUnit: Into<f64> + Copy {
-    /// The unit's string suffix.
-    const SUFFIX: &'static str;
-}
-
-/// Express an canvas's SVG's physical dimensions in inches.
-///
-/// See `Canvas::create_svg` for examples.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct Inches(pub f64);
-
-impl From<Inches> for f64 {
-    fn from(i: Inches) -> f64 {
-        i.0
-    }
-}
-
-impl SvgUnit for Inches {
-    const SUFFIX: &'static str = "in";
-}
-
-/// Express an canvas's SVG's physical dimensions in millimeters.
-///
-/// See `Canvas::create_svg` for examples.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct Millis(pub f64);
-
-impl From<Millis> for f64 {
-    fn from(i: Millis) -> f64 {
-        i.0
-    }
-}
-
-impl SvgUnit for Millis {
-    const SUFFIX: &'static str = "mm";
 }
