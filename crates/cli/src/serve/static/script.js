@@ -186,4 +186,5 @@ events.onerror = event => {
   logs.textContent = `Error: disconnected from ${window.location.host}/events.`;
   console.error(event);
   regenerate.setAttribute("disabled", "");
+  like_button.setAttribute("disabled", "");
 };
