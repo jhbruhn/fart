@@ -1,11 +1,20 @@
 //! Commonly used units and paper size definitions
 
+/// Normalized Space from 0 to 1
+#[derive(Debug)]
+pub struct NormalSpace;
+///Normalized Point from 0 to 1
+pub type NormalPoint = euclid::Point2D<f64, NormalSpace>;
+/// Normalized Size from 0 to 1
+pub type NormalSize = euclid::Size2D<f64, NormalSpace>;
+
 /// A sheet of paper
 #[derive(Debug, Copy, Clone)]
 pub struct Paper<Unit>
 where
     Unit: SvgUnit,
 {
+    // TODO: use Size2D?
     /// Width of the sheet of paper
     pub width: Unit,
     /// Height of the sheet of paper

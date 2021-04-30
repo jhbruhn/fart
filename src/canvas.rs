@@ -11,6 +11,9 @@ use std::collections::BTreeMap;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CanvasSpace;
 
+/// Transform from NormalSpace to CanvasSpace
+type CanvasProjection = euclid::Transform2D<f64, NormalSpace, CanvasSpace>;
+
 #[derive(Clone, Copy, Debug)]
 struct LayerId(u64);
 
@@ -93,6 +96,19 @@ where
     #[inline]
     pub fn paper(&self) -> Paper<Unit> {
         self.paper
+    }
+
+    /// Get Transform from normal to Canvas
+    #[inline]
+    pub fn canvas_transform(&self) -> CanvasProjection {
+        CanvasProjection::new(
+            self.paper().width.into(),
+            0.0,
+            0.0,
+            self.paper().height.into(),
+            0.0,
+            0.0,
+        )
     }
 
     /// Get this canvas's view.
@@ -201,6 +217,21 @@ where
         self.create_or_get_layer(layer_id)
             .paths
             .extend(paths.to_paths());
+    }
+
+    /// Add the given paths to the canvas.
+    pub fn draw_n<P>(&mut self, layer_id: u64, paths: P)
+    where
+        P: ToPaths<f64, crate::units::NormalSpace>,
+    {
+        let paths = paths.to_paths();
+        let projection = self.canvas_transform();
+
+        for path in paths {
+            self.create_or_get_layer(layer_id)
+                .paths
+                .push(path.transform(&projection));
+        }
     }
 
     /// Given a collection of things that can be drawn, draw all of them.

@@ -4,7 +4,7 @@ pub use crate::{
     canvas::{Canvas, CanvasSpace},
     path::{LineCommand, Path, ToPaths},
     process::Process,
-    units::{Inches, Millis},
+    units::{Inches, Millis, Paper},
     user_const, Config,
 };
 pub use euclid::{point2, vec2};
