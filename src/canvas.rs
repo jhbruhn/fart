@@ -1,10 +1,7 @@
 //! A canvas for drawing paths on.
 
-use crate::aabb::Aabb;
-use crate::path::{LineCommand, Path, ToPaths};
+use crate::path::{Path, ToPaths};
 use crate::units::*;
-use euclid::point2;
-use float_ord::FloatOrd;
 use penlib::Pen;
 use slotmap::SlotMap;
 
@@ -77,7 +74,6 @@ where
     Unit: SvgUnit,
 {
     paper: Paper<Unit>,
-    view: Aabb<f64, CanvasSpace>,
     layers: SlotMap<LayerKey, Layer>,
     layer_id_counter: u64,
 }
@@ -90,10 +86,6 @@ where
     pub fn new(paper: Paper<Unit>) -> Canvas<Unit> {
         Canvas {
             paper,
-            view: Aabb::new(
-                point2(0.0, 0.0),
-                point2(paper.width.into(), paper.height.into()),
-            ),
             layers: SlotMap::with_key(),
             layer_id_counter: 0,
         }
@@ -117,84 +109,6 @@ where
         CanvasProjection::scale(self.width().into(), self.height().into()).then_translate(
             euclid::vec2(self.paper.margin.into(), self.paper.margin.into()),
         )
-    }
-
-    /// Get this canvas's view.
-    #[inline]
-    pub fn view(&self) -> &Aabb<f64, CanvasSpace> {
-        &self.view
-    }
-
-    /// Set this canvas's view.
-    #[inline]
-    pub fn set_view(&mut self, view: Aabb<f64, CanvasSpace>) {
-        self.view = view;
-    }
-
-    /// Make this canvas's view the bounding box of all the paths that have been
-    /// added to the canvas.
-    pub fn fit_view_to_paths(&mut self) {
-        if self.layers.is_empty() {
-            return;
-        }
-
-        let mut min_x = std::f64::MAX;
-        let mut min_y = std::f64::MAX;
-        let mut max_x = std::f64::MIN;
-        let mut max_y = std::f64::MIN;
-
-        let mut process_point = |p: &euclid::Point2D<f64, CanvasSpace>| {
-            min_x = std::cmp::min(FloatOrd(min_x), FloatOrd(p.x)).0;
-            min_y = std::cmp::min(FloatOrd(min_y), FloatOrd(p.y)).0;
-            max_x = std::cmp::max(FloatOrd(max_x), FloatOrd(p.x)).0;
-            max_y = std::cmp::max(FloatOrd(max_y), FloatOrd(p.y)).0;
-        };
-
-        for layer in self.layers.values() {
-            for path in layer.paths.iter() {
-                for cmd in path.commands.iter() {
-                    match cmd {
-                        LineCommand::MoveTo(p)
-                        | LineCommand::LineTo(p)
-                        | LineCommand::SmoothQuadtraticCurveTo(p) => process_point(p),
-
-                        LineCommand::CubicBezierTo {
-                            control_1,
-                            control_2,
-                            end,
-                        } => {
-                            process_point(control_1);
-                            process_point(control_2);
-                            process_point(end);
-                        }
-
-                        LineCommand::SmoothCubicBezierTo { control, end }
-                        | LineCommand::QuadraticBezierTo { control, end } => {
-                            process_point(control);
-                            process_point(end);
-                        }
-
-                        LineCommand::Close => {}
-
-                        LineCommand::MoveBy(_)
-                        | LineCommand::LineBy(_)
-                        | LineCommand::HorizontalLineTo(_)
-                        | LineCommand::HorizontalLineBy(_)
-                        | LineCommand::VerticalLineTo(_)
-                        | LineCommand::VerticalLineBy(_)
-                        | LineCommand::CubicBezierBy { .. }
-                        | LineCommand::SmoothCubicBezierBy { .. }
-                        | LineCommand::QuadraticBezierBy { .. }
-                        | LineCommand::SmoothQuadtraticCurveBy(_)
-                        | LineCommand::ArcTo { .. }
-                        | LineCommand::ArcBy { .. } => unimplemented!(),
-                    }
-                }
-            }
-        }
-
-        let view = Aabb::new(point2(min_x, min_y), point2(max_x, max_y));
-        self.set_view(view);
     }
 
     /// Register a new Layer using the given pen
@@ -313,10 +227,10 @@ where
                 "viewBox",
                 format!(
                     "{} {} {} {}",
-                    self.view.min().x,
-                    self.view.min().y,
-                    self.view.width(),
-                    self.view.height(),
+                    0.0,
+                    0.0,
+                    self.paper.width.into(),
+                    self.paper.height.into(),
                 ),
             )
             .set("width", format!("{}{}", width, Unit::SUFFIX))
