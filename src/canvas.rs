@@ -6,7 +6,7 @@ use crate::units::*;
 use euclid::point2;
 use float_ord::FloatOrd;
 use penlib::Pen;
-use std::collections::HashMap;
+use slotmap::SlotMap;
 
 /// Unit for things within the canvas space.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -64,6 +64,11 @@ impl From<&Layer> for svg::node::element::Group {
     }
 }
 
+slotmap::new_key_type! {
+    /// Key to identify a layer created on the Canvas
+    pub struct LayerKey;
+}
+
 /// A canvas is a collection of rendered paths. To add new paths to the canvas,
 /// use the `draw` method.
 #[derive(Debug)]
@@ -73,7 +78,7 @@ where
 {
     paper: Paper<Unit>,
     view: Aabb<f64, CanvasSpace>,
-    layers: HashMap<u64, Layer>,
+    layers: SlotMap<LayerKey, Layer>,
     stroke_width: f64,
     layer_id_counter: u64,
 }
@@ -91,7 +96,7 @@ where
                 point2(0.0, 0.0),
                 point2(paper.width.into(), paper.height.into()),
             ),
-            layers: HashMap::new(),
+            layers: SlotMap::with_key(),
             stroke_width,
             layer_id_counter: 0,
         }
@@ -205,42 +210,28 @@ where
         self.set_view(view);
     }
 
-    fn hash(&self, pen: impl std::hash::Hash) -> u64 {
-        use std::hash::Hasher;
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        pen.hash(&mut hasher);
-        hasher.finish()
+    /// Register a new Layer using the given pen
+    pub fn create_layer<P>(&mut self, pen: P) -> LayerKey
+    where
+        P: Pen,
+    {
+        self.layer_id_counter += 1;
+        self.layers.insert(Layer {
+            paths: Vec::new(),
+            id: LayerId(self.layer_id_counter),
+            color: pen.rgb_color(),
+            nib_size: Millis(P::nib_size_mm()),
+        })
     }
 
-    /// Create the layer with the given id. panics if it exists
-    fn create_layer<P>(&mut self, pen: P)
-    where
-        P: Pen + std::hash::Hash + Copy,
-    {
-        let pen_hash = self.hash(pen);
-        assert!(!self.layers.contains_key(&pen_hash));
-        self.layers.insert(
-            pen_hash,
-            Layer {
-                paths: Vec::new(),
-                id: LayerId(self.layer_id_counter),
-                color: pen.rgb_color(),
-                nib_size: Millis(P::nib_size_mm()),
-            },
-        );
-        self.layer_id_counter += 1;
+    /// Remove a layer from the canvas
+    pub fn remove_layer(&mut self, key: LayerKey) -> Result<(), ()> {
+        self.layers.remove(key).ok_or(()).map(|_| ())
     }
 
     /// Get an existing layer with the given ID or create it if it does not exist
-    pub fn create_or_get_layer<P>(&mut self, pen: P) -> &mut Layer
-    where
-        P: Pen + std::hash::Hash + Copy,
-    {
-        let pen_hash = self.hash(pen);
-        if !self.layers.contains_key(&pen_hash) {
-            self.create_layer(pen);
-        }
-        self.layers.get_mut(&pen_hash).unwrap()
+    pub fn get_layer(&mut self, key: LayerKey) -> &mut Layer {
+        self.layers.get_mut(key).unwrap()
     }
 
     fn margin_transform(&self) -> euclid::Transform2D<f64, CanvasSpace, CanvasSpace> {
@@ -248,43 +239,41 @@ where
     }
 
     /// Add the given paths to the canvas.
-    pub fn draw<PathsT, P>(&mut self, pen: P, paths: PathsT)
+    pub fn draw<PathsT, P>(&mut self, layer: LayerKey, paths: PathsT)
     where
         PathsT: ToPaths<f64, CanvasSpace>,
         P: Pen + std::hash::Hash + Copy,
     {
         let paths = paths.to_paths();
         let margin_transform = self.margin_transform();
-        let layer = self.create_or_get_layer(pen);
+        let layer = self.get_layer(layer);
         for path in paths {
             layer.paths.push(path.transform(&margin_transform));
         }
     }
 
     /// Add the given paths to the canvas.
-    pub fn draw_n<PathsT, P>(&mut self, pen: P, paths: PathsT)
+    pub fn draw_n<PathsT>(&mut self, layer: LayerKey, paths: PathsT)
     where
         PathsT: ToPaths<f64, crate::units::NormalSpace>,
-        P: Pen + std::hash::Hash + Copy,
     {
         let paths = paths.to_paths();
         let projection = self.canvas_transform();
 
-        let layer = self.create_or_get_layer(pen);
+        let layer = self.get_layer(layer);
         for path in paths {
             layer.paths.push(path.transform(&projection));
         }
     }
 
     /// Given a collection of things that can be drawn, draw all of them.
-    pub fn draw_many<I, P, PN>(&mut self, pen: PN, paths: I)
+    pub fn draw_many<I, P, PN>(&mut self, layer: LayerKey, paths: I)
     where
         I: IntoIterator<Item = P>,
         P: ToPaths<f64, CanvasSpace>,
-        PN: Pen + std::hash::Hash + Copy,
     {
         let margin_transform = self.margin_transform();
-        let layer = self.create_or_get_layer(pen);
+        let layer = self.get_layer(layer);
         for p in paths {
             for path in p.to_paths() {
                 layer.paths.push(path.transform(&margin_transform));
@@ -292,14 +281,13 @@ where
         }
     }
     /// Given a collection of things that can be drawn, draw all of them.
-    pub fn draw_n_many<I, P, PN>(&mut self, pen: PN, paths: I)
+    pub fn draw_n_many<I, P>(&mut self, layer: LayerKey, paths: I)
     where
         I: IntoIterator<Item = P>,
         P: ToPaths<f64, NormalSpace>,
-        PN: Pen + std::hash::Hash + Copy,
     {
         let transform = self.canvas_transform();
-        let layer = self.create_or_get_layer(pen);
+        let layer = self.get_layer(layer);
         for p in paths {
             for path in p.to_paths() {
                 layer.paths.push(path.transform(&transform));
