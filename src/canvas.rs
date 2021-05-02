@@ -35,7 +35,7 @@ impl From<LayerId> for String {
 
 /// A Layer contains a collection of path to be drawn on that specific layer
 #[derive(Debug)]
-pub struct Layer {
+struct Layer {
     id: LayerId,
     paths: Vec<Path<f64, CanvasSpace>>,
     color: palette::rgb::LinSrgb,
@@ -79,7 +79,6 @@ where
     paper: Paper<Unit>,
     view: Aabb<f64, CanvasSpace>,
     layers: SlotMap<LayerKey, Layer>,
-    stroke_width: f64,
     layer_id_counter: u64,
 }
 
@@ -89,7 +88,6 @@ where
 {
     /// Construct a new canvas with the given viewport.
     pub fn new(paper: Paper<Unit>) -> Canvas<Unit> {
-        let stroke_width = std::cmp::max(FloatOrd(0.2), FloatOrd(paper.width.into() / 500.0)).0;
         Canvas {
             paper,
             view: Aabb::new(
@@ -97,19 +95,8 @@ where
                 point2(paper.width.into(), paper.height.into()),
             ),
             layers: SlotMap::with_key(),
-            stroke_width,
             layer_id_counter: 0,
         }
-    }
-
-    /// Get the stroke width for paths in this canvas.
-    pub fn stroke_width(&self) -> f64 {
-        self.stroke_width
-    }
-
-    /// Set the stroke width for paths in this canvas.
-    pub fn set_stroke_width(&mut self, stroke_width: f64) {
-        self.stroke_width = stroke_width;
     }
 
     /// Get this canvas's width
@@ -215,13 +202,14 @@ where
     where
         P: Pen,
     {
-        self.layer_id_counter += 1;
-        self.layers.insert(Layer {
+        let layer = self.layers.insert(Layer {
             paths: Vec::new(),
             id: LayerId(self.layer_id_counter),
             color: pen.rgb_color(),
             nib_size: Millis(P::nib_size_mm()),
-        })
+        });
+        self.layer_id_counter += 1;
+        layer
     }
 
     /// Remove a layer from the canvas
@@ -230,7 +218,7 @@ where
     }
 
     /// Get an existing layer with the given ID or create it if it does not exist
-    pub fn get_layer(&mut self, key: LayerKey) -> &mut Layer {
+    fn get_layer(&mut self, key: LayerKey) -> &mut Layer {
         self.layers.get_mut(key).unwrap()
     }
 
