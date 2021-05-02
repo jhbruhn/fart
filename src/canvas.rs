@@ -94,20 +94,28 @@ where
     /// Get this canvas's width
     #[inline]
     pub fn width(&self) -> Unit {
-        self.paper.width - self.paper.margin - self.paper.margin
+        self.paper.width - self.paper.margin_left - self.paper.margin_right
     }
 
     /// Get this height's height
     #[inline]
     pub fn height(&self) -> Unit {
-        self.paper.height - self.paper.margin - self.paper.margin
+        self.paper.height - self.paper.margin_top - self.paper.margin_bottom
     }
 
     /// Get Transform from normal to Canvas
     #[inline]
     pub fn canvas_transform(&self) -> CanvasProjection {
         CanvasProjection::scale(self.width().into(), self.height().into()).then_translate(
-            euclid::vec2(self.paper.margin.into(), self.paper.margin.into()),
+            euclid::vec2(self.paper.margin_left.into(), self.paper.margin_top.into()),
+        )
+    }
+
+    #[inline]
+    fn margin_transform(&self) -> euclid::Transform2D<f64, CanvasSpace, CanvasSpace> {
+        euclid::Transform2D::translation(
+            self.paper.margin_left.into(),
+            self.paper.margin_top.into(),
         )
     }
 
@@ -134,10 +142,6 @@ where
     /// Get an existing layer with the given ID or create it if it does not exist
     fn get_layer(&mut self, key: LayerKey) -> &mut Layer {
         self.layers.get_mut(key).unwrap()
-    }
-
-    fn margin_transform(&self) -> euclid::Transform2D<f64, CanvasSpace, CanvasSpace> {
-        euclid::Transform2D::translation(self.paper.margin.into(), self.paper.margin.into())
     }
 
     /// Add the given paths to the canvas.

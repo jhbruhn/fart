@@ -20,8 +20,14 @@ where
     /// Height of the sheet of paper
     pub height: Unit,
 
-    /// Margin at the edges
-    pub margin: Unit,
+    /// Margin at the top
+    pub margin_top: Unit,
+    /// Margin at the bottom
+    pub margin_bottom: Unit,
+    /// Margin at the left
+    pub margin_left: Unit,
+    /// Margin at the right
+    pub margin_right: Unit,
 }
 
 impl<Unit> Paper<Unit>
@@ -30,28 +36,83 @@ where
 {
     /// Create a new Paper with associated width and height
     pub fn new(width: Unit, height: Unit) -> Paper<Unit> {
-        Paper {
+        Self {
             width,
             height,
-            margin: Unit::ZERO,
+            margin_top: Unit::ZERO,
+            margin_bottom: Unit::ZERO,
+            margin_left: Unit::ZERO,
+            margin_right: Unit::ZERO,
         }
     }
 
     /// Turn this Paper by 90 degrees
     pub fn switch_orientation(self) -> Paper<Unit> {
-        Paper {
+        Self {
             width: self.height,
             height: self.width,
-            margin: self.margin,
+            margin_top: self.margin_left,
+            margin_bottom: self.margin_right,
+            margin_left: self.margin_top,
+            margin_right: self.margin_bottom,
         }
     }
 
     /// Add a margin to the edges
     pub fn add_margin(self, margin: Unit) -> Paper<Unit> {
-        Paper {
+        Self {
             width: self.width,
             height: self.height,
-            margin,
+            margin_left: margin,
+            margin_right: margin,
+            margin_top: margin,
+            margin_bottom: margin,
+        }
+    }
+
+    /// Add different margins to the edges
+    pub fn add_margins(
+        self,
+        margin_top: Unit,
+        margin_right: Unit,
+        margin_bottom: Unit,
+        margin_left: Unit,
+    ) -> Paper<Unit> {
+        Self {
+            width: self.width,
+            height: self.height,
+            margin_left,
+            margin_right,
+            margin_top,
+            margin_bottom,
+        }
+    }
+
+    /// Make the margins so that the content is centered in square with the smallest margin being
+    /// given in the argument
+    pub fn make_square(self, smallest_margin: Unit) -> Paper<Unit> {
+        if self.width > self.height {
+            let size = self.height - smallest_margin - smallest_margin;
+            let margin_sides = (self.width - size) / 2.0;
+            Self {
+                width: self.width,
+                height: self.height,
+                margin_top: smallest_margin,
+                margin_bottom: smallest_margin,
+                margin_left: margin_sides,
+                margin_right: margin_sides,
+            }
+        } else {
+            let size = self.width - smallest_margin - smallest_margin;
+            let margin_sides = (self.height - size) / 2.0;
+            Self {
+                width: self.width,
+                height: self.height,
+                margin_top: margin_sides,
+                margin_bottom: margin_sides,
+                margin_left: smallest_margin,
+                margin_right: smallest_margin,
+            }
         }
     }
 }
@@ -62,7 +123,10 @@ macro_rules! const_paper_mm {
         pub const $name: Paper<Millis> = Paper {
             width: Millis($width),
             height: Millis($height),
-            margin: Millis(0.0),
+            margin_top: Millis::ZERO,
+            margin_bottom: Millis::ZERO,
+            margin_left: Millis::ZERO,
+            margin_right: Millis::ZERO,
         };
     };
 }
@@ -88,7 +152,9 @@ pub mod papers {
 
 /// A physical unit supported by SVG (inches, centimeters, etc). Used when
 /// plotting an image.
-pub trait SvgUnit: Copy + Into<f64> + std::ops::Sub<Output = Self> {
+pub trait SvgUnit:
+    Copy + Into<f64> + std::ops::Sub<Output = Self> + std::cmp::PartialOrd + std::ops::Div<f64, Output = Self>
+{
     /// The unit's string suffix.
     const SUFFIX: &'static str;
     /// The unit's zero value.
@@ -120,6 +186,14 @@ impl std::ops::Sub for Inches {
     }
 }
 
+impl std::ops::Div<f64> for Inches {
+    type Output = Self;
+
+    fn div(self, other: f64) -> Self::Output {
+        Self(self.0 / other)
+    }
+}
+
 /// Express an canvas's SVG's physical dimensions in millimeters.
 ///
 /// See `Canvas::create_svg` for examples.
@@ -142,6 +216,14 @@ impl std::ops::Sub for Millis {
 
     fn sub(self, other: Self) -> Self::Output {
         Self(self.0 - other.0)
+    }
+}
+
+impl std::ops::Div<f64> for Millis {
+    type Output = Self;
+
+    fn div(self, other: f64) -> Self::Output {
+        Self(self.0 / other)
     }
 }
 
