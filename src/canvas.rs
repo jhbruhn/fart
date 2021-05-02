@@ -5,7 +5,8 @@ use crate::path::{LineCommand, Path, ToPaths};
 use crate::units::*;
 use euclid::point2;
 use float_ord::FloatOrd;
-use std::collections::BTreeMap;
+use penlib::Pen;
+use std::collections::HashMap;
 
 /// Unit for things within the canvas space.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -37,16 +38,28 @@ impl From<LayerId> for String {
 pub struct Layer {
     id: LayerId,
     paths: Vec<Path<f64, CanvasSpace>>,
+    color: palette::rgb::LinSrgb,
+    nib_size: Millis,
 }
 
 impl From<&Layer> for svg::node::element::Group {
     fn from(item: &Layer) -> svg::node::element::Group {
+        let color = item.color.into_components();
         svg::node::element::Group::new()
             .set("fill", "none")
-            .set("id", format!("layer{}", item.id.0))
+            .set("id", format!("layer{}", item.id.0 + 1))
             .set("inkscape:groupmode", "layer")
-            .set("inkscape:label", item.id.0.to_string())
-            .set::<_, String>("stroke", item.id.into())
+            .set("inkscape:label", (item.id.0 + 1).to_string())
+            .set::<_, String>(
+                "stroke",
+                format!(
+                    "rgb({},{},{})",
+                    color.0 * 255.0,
+                    color.1 * 255.0,
+                    color.2 * 255.0
+                ),
+            )
+            .set("stroke-linecap", "round")
             .set("style", "display:inline")
     }
 }
@@ -60,8 +73,9 @@ where
 {
     paper: Paper<Unit>,
     view: Aabb<f64, CanvasSpace>,
-    layers: BTreeMap<u64, Layer>,
+    layers: HashMap<u64, Layer>,
     stroke_width: f64,
+    layer_id_counter: u64,
 }
 
 impl<Unit> Canvas<Unit>
@@ -77,8 +91,9 @@ where
                 point2(0.0, 0.0),
                 point2(paper.width.into(), paper.height.into()),
             ),
-            layers: BTreeMap::new(),
+            layers: HashMap::new(),
             stroke_width,
+            layer_id_counter: 0,
         }
     }
 
@@ -92,22 +107,23 @@ where
         self.stroke_width = stroke_width;
     }
 
-    /// Get this canvas's paper
+    /// Get this canvas's width
     #[inline]
-    pub fn paper(&self) -> Paper<Unit> {
-        self.paper
+    pub fn width(&self) -> Unit {
+        self.paper.width - self.paper.margin - self.paper.margin
+    }
+
+    /// Get this height's height
+    #[inline]
+    pub fn height(&self) -> Unit {
+        self.paper.height - self.paper.margin - self.paper.margin
     }
 
     /// Get Transform from normal to Canvas
     #[inline]
     pub fn canvas_transform(&self) -> CanvasProjection {
-        CanvasProjection::new(
-            self.paper().width.into(),
-            0.0,
-            0.0,
-            self.paper().height.into(),
-            0.0,
-            0.0,
+        CanvasProjection::scale(self.width().into(), self.height().into()).then_translate(
+            euclid::vec2(self.paper.margin.into(), self.paper.margin.into()),
         )
     }
 
@@ -189,60 +205,105 @@ where
         self.set_view(view);
     }
 
-    /// Create the layer with the given idea. panics if it exists
-    fn create_layer(&mut self, layer_id: u64) {
-        assert!(!self.layers.contains_key(&layer_id));
+    fn hash(&self, pen: impl std::hash::Hash) -> u64 {
+        use std::hash::Hasher;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        pen.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Create the layer with the given id. panics if it exists
+    fn create_layer<P>(&mut self, pen: P)
+    where
+        P: Pen + std::hash::Hash + Copy,
+    {
+        let pen_hash = self.hash(pen);
+        assert!(!self.layers.contains_key(&pen_hash));
         self.layers.insert(
-            layer_id,
+            pen_hash,
             Layer {
                 paths: Vec::new(),
-                id: LayerId(layer_id),
+                id: LayerId(self.layer_id_counter),
+                color: pen.rgb_color(),
+                nib_size: Millis(P::nib_size_mm()),
             },
         );
+        self.layer_id_counter += 1;
     }
 
     /// Get an existing layer with the given ID or create it if it does not exist
-    pub fn create_or_get_layer(&mut self, layer_id: u64) -> &mut Layer {
-        if !self.layers.contains_key(&layer_id) {
-            self.create_layer(layer_id);
-        }
-        self.layers.get_mut(&layer_id).unwrap()
-    }
-
-    /// Add the given paths to the canvas.
-    pub fn draw<P>(&mut self, layer_id: u64, paths: P)
+    pub fn create_or_get_layer<P>(&mut self, pen: P) -> &mut Layer
     where
-        P: ToPaths<f64, CanvasSpace>,
+        P: Pen + std::hash::Hash + Copy,
     {
-        self.create_or_get_layer(layer_id)
-            .paths
-            .extend(paths.to_paths());
+        let pen_hash = self.hash(pen);
+        if !self.layers.contains_key(&pen_hash) {
+            self.create_layer(pen);
+        }
+        self.layers.get_mut(&pen_hash).unwrap()
+    }
+
+    fn margin_transform(&self) -> euclid::Transform2D<f64, CanvasSpace, CanvasSpace> {
+        euclid::Transform2D::translation(self.paper.margin.into(), self.paper.margin.into())
     }
 
     /// Add the given paths to the canvas.
-    pub fn draw_n<P>(&mut self, layer_id: u64, paths: P)
+    pub fn draw<PathsT, P>(&mut self, pen: P, paths: PathsT)
     where
-        P: ToPaths<f64, crate::units::NormalSpace>,
+        PathsT: ToPaths<f64, CanvasSpace>,
+        P: Pen + std::hash::Hash + Copy,
+    {
+        let paths = paths.to_paths();
+        let margin_transform = self.margin_transform();
+        let layer = self.create_or_get_layer(pen);
+        for path in paths {
+            layer.paths.push(path.transform(&margin_transform));
+        }
+    }
+
+    /// Add the given paths to the canvas.
+    pub fn draw_n<PathsT, P>(&mut self, pen: P, paths: PathsT)
+    where
+        PathsT: ToPaths<f64, crate::units::NormalSpace>,
+        P: Pen + std::hash::Hash + Copy,
     {
         let paths = paths.to_paths();
         let projection = self.canvas_transform();
 
+        let layer = self.create_or_get_layer(pen);
         for path in paths {
-            self.create_or_get_layer(layer_id)
-                .paths
-                .push(path.transform(&projection));
+            layer.paths.push(path.transform(&projection));
         }
     }
 
     /// Given a collection of things that can be drawn, draw all of them.
-    pub fn draw_many<I, P>(&mut self, layer_id: u64, paths: I)
+    pub fn draw_many<I, P, PN>(&mut self, pen: PN, paths: I)
     where
         I: IntoIterator<Item = P>,
         P: ToPaths<f64, CanvasSpace>,
+        PN: Pen + std::hash::Hash + Copy,
     {
-        let layer = self.create_or_get_layer(layer_id);
+        let margin_transform = self.margin_transform();
+        let layer = self.create_or_get_layer(pen);
         for p in paths {
-            layer.paths.extend(p.to_paths());
+            for path in p.to_paths() {
+                layer.paths.push(path.transform(&margin_transform));
+            }
+        }
+    }
+    /// Given a collection of things that can be drawn, draw all of them.
+    pub fn draw_n_many<I, P, PN>(&mut self, pen: PN, paths: I)
+    where
+        I: IntoIterator<Item = P>,
+        P: ToPaths<f64, NormalSpace>,
+        PN: Pen + std::hash::Hash + Copy,
+    {
+        let transform = self.canvas_transform();
+        let layer = self.create_or_get_layer(pen);
+        for p in paths {
+            for path in p.to_paths() {
+                layer.paths.push(path.transform(&transform));
+            }
         }
     }
 
@@ -290,7 +351,8 @@ where
 
             for path in &layer.paths {
                 let path: svg::node::element::Path = path.into();
-                layer_node = layer_node.add(path.set("stroke-width", self.stroke_width));
+                layer_node =
+                    layer_node.add(path.set("stroke-width", format!("{}", layer.nib_size.0)));
             }
 
             doc = doc.add(layer_node);

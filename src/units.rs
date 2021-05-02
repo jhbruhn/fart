@@ -19,6 +19,9 @@ where
     pub width: Unit,
     /// Height of the sheet of paper
     pub height: Unit,
+
+    /// Margin at the edges
+    pub margin: Unit,
 }
 
 impl<Unit> Paper<Unit>
@@ -27,7 +30,11 @@ where
 {
     /// Create a new Paper with associated width and height
     pub fn new(width: Unit, height: Unit) -> Paper<Unit> {
-        Paper { width, height }
+        Paper {
+            width,
+            height,
+            margin: Unit::ZERO,
+        }
     }
 
     /// Turn this Paper by 90 degrees
@@ -35,6 +42,16 @@ where
         Paper {
             width: self.height,
             height: self.width,
+            margin: self.margin,
+        }
+    }
+
+    /// Add a margin to the edges
+    pub fn add_margin(self, margin: Unit) -> Paper<Unit> {
+        Paper {
+            width: self.width,
+            height: self.height,
+            margin,
         }
     }
 }
@@ -45,6 +62,7 @@ macro_rules! const_paper_mm {
         pub const $name: Paper<Millis> = Paper {
             width: Millis($width),
             height: Millis($height),
+            margin: Millis(0.0),
         };
     };
 }
@@ -70,9 +88,11 @@ pub mod papers {
 
 /// A physical unit supported by SVG (inches, centimeters, etc). Used when
 /// plotting an image.
-pub trait SvgUnit: Into<f64> + Copy {
+pub trait SvgUnit: Copy + Into<f64> + std::ops::Sub<Output = Self> {
     /// The unit's string suffix.
     const SUFFIX: &'static str;
+    /// The unit's zero value.
+    const ZERO: Self;
 }
 
 /// Express an canvas's SVG's physical dimensions in inches.
@@ -89,6 +109,15 @@ impl From<Inches> for f64 {
 
 impl SvgUnit for Inches {
     const SUFFIX: &'static str = "in";
+    const ZERO: Self = Self(0.0);
+}
+
+impl std::ops::Sub for Inches {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self::Output {
+        Self(self.0 - other.0)
+    }
 }
 
 /// Express an canvas's SVG's physical dimensions in millimeters.
@@ -105,6 +134,15 @@ impl From<Millis> for f64 {
 
 impl SvgUnit for Millis {
     const SUFFIX: &'static str = "mm";
+    const ZERO: Self = Self(0.0);
+}
+
+impl std::ops::Sub for Millis {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self::Output {
+        Self(self.0 - other.0)
+    }
 }
 
 impl From<Inches> for Millis {

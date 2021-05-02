@@ -10,6 +10,8 @@ repository = "https://github.com/fitzgen/fart"
 version = "0.4.0"
 
 [dependencies]
+penlib = { git = "https://github.com/jhbruhn/penlib.git" }
+palette = "0.4.1"
 euclid = "0.22.3"
 failure = "0.1.8"
 fart-2d-geom = { version = "=0.4.0", path = "crates/2d-geom" }

@@ -12,6 +12,7 @@ pub use fart_aabb::{Aabb, ToAabb};
 pub use fart_utils::{clamp, map_range};
 pub use lazy_static::lazy_static;
 pub use noise::NoiseFn;
+pub use penlib::*;
 pub use rand::{
     distributions::{Distribution, Uniform},
     Rng,

@@ -53,6 +53,7 @@ pub use noise;
 pub use num_traits;
 pub use rand;
 pub use svg;
+pub use penlib;
 
 pub use thread_rng::FartThreadRng;
 
